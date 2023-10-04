@@ -1,69 +1,140 @@
-import React, { useEffect, useState } from 'react'
-import TodoItem from './components/TodoItem'
-import AddTodo from './components/AddTodo'
-import { getTodos, addTodo, updateTodo, deleteTodo } from './API'
+import axios, { AxiosResponse } from 'axios'
+import React, { useState } from 'react'
 
-const App: React.FC = () => {
-  const [todos, setTodos] = useState<ITodo[]>([])
+const PATH = '//localhost:4000';
 
-  useEffect(() => {
-    fetchTodos()
-  }, [])
 
-  const fetchTodos = (): void => {
-    getTodos()
-    .then(({ data: { todos } }: ITodo[] | any) => setTodos(todos))
-    .catch((err: Error) => console.log(err))
-  }
-
- const handleSaveTodo = (e: React.FormEvent, formData: ITodo): void => {
-   e.preventDefault()
-   addTodo(formData)
-   .then(({ status, data }) => {
-    if (status !== 201) {
-      throw new Error('Error! Todo not saved')
-    }
-    setTodos(data.todos)
-  })
-  .catch((err) => console.log(err))
+const getCounters = (): Promise<Response> => {
+    return fetch(`${PATH}/counters`, {
+        method: 'GET',
+        headers: {
+            'Access-Control-Allow-Origin': '*',
+        },
+    })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        });
 }
 
-  const handleUpdateTodo = (todo: ITodo): void => {
-    updateTodo(todo)
-    .then(({ status, data }) => {
-        if (status !== 200) {
-          throw new Error('Error! Todo not updated')
-        }
-        setTodos(data.todos)
-      })
-      .catch((err) => console.log(err))
-  }
+const createUser = (
+    username: string,
+): Promise<Response> => {
+    return fetch(`${PATH}/login`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username }),
+    })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        });
+}
 
-  const handleDeleteTodo = (_id: string): void => {
-    deleteTodo(_id)
-    .then(({ status, data }) => {
-        if (status !== 200) {
-          throw new Error('Error! Todo not deleted')
-        }
-        setTodos(data.todos)
-      })
-      .catch((err) => console.log(err))
-  }
+const increaseCounter = (
+    username: string,
+): Promise<Response> => {
+    return fetch(`${PATH}/counters/${username}`, {
+        method: 'PUT',
+    })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        });
+}
+const App: React.FC = () => {
+    const [loggedInAs, setLoggedInAs] = useState<string | undefined>(undefined);
+    const [username, setUsername] = useState<string>('');
+    const [counters, setCounters] = useState<Record<string, number>>({});
 
-  return (
-    <main className='App'>
-      <h1>My Todos</h1>
-      <AddTodo saveTodo={handleSaveTodo} />
-      {todos.map((todo: ITodo) => (
-        <TodoItem
-          key={todo._id}
-          updateTodo={handleUpdateTodo}
-          deleteTodo={handleDeleteTodo}
-          todo={todo}
-        />
-      ))}
-    </main>
-  )
+    const login = (e: React.FormEvent<HTMLFormElement>): void => {
+        e.preventDefault();
+        if (username === '') {
+            alert('Please enter a username');
+        }
+        else {
+            createUser(username)
+                .then((response) => setLoggedInAs(response.username))
+                .then(() => fetchCounters())
+                .catch(console.error);
+        }
+    }
+
+    const fetchCounters = (): void => {
+        getCounters()
+            .then((response) => setCounters(response.counters))
+            .catch(console.error);
+    }
+
+    const handleUsernameChange = (e: React.FormEvent<HTMLInputElement>): void => {
+        e.preventDefault();
+        setUsername(e.currentTarget.value);
+    };
+
+    const handleIncreaseCounter = (e: React.FormEvent<HTMLButtonElement>): void => {
+        e.preventDefault();
+        increaseCounter(username)
+            .then((response) => setCounters(response.counters))
+            .catch(console.error);
+    };
+
+    const handleLogout = (): void => {
+        setUsername('');
+        setLoggedInAs(undefined)
+    };
+
+
+    const Counter = () =>
+        <div id='main'>
+            <h1>Counters</h1>
+            <h3>Logged in as {loggedInAs} (<a href='#' onClick={handleLogout}>logout</a>)</h3>
+            <div id="counter">
+                {loggedInAs && (
+                    <div>Current User {loggedInAs}: {counters[loggedInAs]}</div>
+                )}
+                {Object.keys(counters)
+                    .filter(username => username !== loggedInAs)
+                    .map(username => (
+                        <ul>
+                            <li key={username}>
+                                {username}: {counters[username]}
+                            </li>
+                        </ul>
+                    ))}
+            </div> <div id="increase-counter">
+                <button onClick={handleIncreaseCounter}>Click here!</button>
+            </div>
+        </div>
+
+
+
+    return (
+        <main className='App'>
+            {
+                loggedInAs === undefined
+                    ? (
+                        <div id='main'>
+                            <h1>Welcome to the counter app</h1>
+                            <div>
+                                <form onSubmit={login} id='form' method="post" noValidate>
+                                    <input type='text' name='username' placeholder='Username' onChange={handleUsernameChange} required />
+                                    <input type='submit' value='Login' />
+                                </form>
+                            </div>
+                        </div>
+                    )
+                    : <Counter />
+            }
+        </main>
+    )
 }
 
 export default App
